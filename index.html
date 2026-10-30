@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Strategic Operations: B-2 Deep Strike</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; -webkit-user-select: none; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body, html { width: 100%; height: 100%; overflow: hidden; background: #020617; display: flex; justify-content: center; align-items: center; }
+        #game-container { position: relative; width: 100%; height: 100%; max-width: 600px; max-height: 100vh; background: #030812; overflow: hidden; box-shadow: 0 0 40px rgba(0,0,0,0.8); }
+        canvas { display: block; width: 100%; height: 100%; }
+        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; display: flex; flex-direction: column; justify-content: space-between; padding: 10px; z-index: 5; }
+        .hud-top { display: flex; flex-direction: column; gap: 8px; }
+        .hud-row { display: flex; justify-content: space-between; align-items: center; }
+        .hud-box { background: rgba(8, 18, 32, 0.85); border: 1px solid rgba(0, 243, 255, 0.4); padding: 6px 12px; border-radius: 8px; color: #fff; backdrop-filter: blur(5px); pointer-events: auto; }
+        .score-title { font-size: 10px; color: #00f3ff; text-transform: uppercase; letter-spacing: 0.5px; }
+        .score-val { font-size: 16px; font-weight: bold; color: #ffffff; font-family: monospace; }
+        .highscore-val { font-size: 12px; font-weight: bold; color: #fbbf24; font-family: monospace; }
+        .health-bg { width: 100px; height: 8px; background: rgba(0,0,0,0.6); border-radius: 4px; overflow: hidden; border: 1px solid rgba(255,255,255,0.3); margin-top: 3px; }
+        .health-bar { width: 100%; height: 100%; background: linear-gradient(90deg, #ef4444, #00f3ff); transition: width 0.2s ease; }
+        
+        .level-bar { display: flex; gap: 4px; justify-content: center; background: rgba(8, 18, 32, 0.7); border: 1px solid rgba(0, 243, 255, 0.3); padding: 4px; border-radius: 20px; backdrop-filter: blur(4px); pointer-events: auto; }
+        .level-btn { border: 1px solid #475569; background: #1e293b; color: #64748b; font-size: 9px; font-weight: bold; padding: 3px 8px; border-radius: 12px; transition: all 0.3s ease; }
+        .level-btn.active { background: linear-gradient(135deg, #00f3ff, #2563eb); color: #030812; border-color: #fff; box-shadow: 0 0 8px rgba(0, 243, 255, 0.6); }
+
+        .info-btn { position: absolute; bottom: 12px; left: 12px; width: 36px; height: 36px; border-radius: 10px; background: rgba(8, 18, 32, 0.9); border: 1px solid rgba(0, 243, 255, 0.5); color: #00f3ff; font-weight: bold; display: flex; justify-content: center; align-items: center; cursor: pointer; pointer-events: auto; z-index: 10; font-size: 14px; box-shadow: 0 0 10px rgba(0,243,255,0.2); }
+        .info-pop { position: absolute; bottom: 55px; left: 12px; background: rgba(8, 18, 32, 0.95); border: 1px solid rgba(0, 243, 255, 0.5); color: #fff; padding: 10px 14px; border-radius: 8px; font-size: 11px; z-index: 10; pointer-events: auto; line-height: 1.5; }
+        .info-pop a { color: #00f3ff; text-decoration: none; font-weight: bold; }
+
+        .bomb-btn { position: absolute; bottom: 12px; right: 12px; width: 56px; height: 56px; border-radius: 16px; background: linear-gradient(135deg, #ef4444, #2563eb); border: 2px solid #00f3ff; color: #fff; font-size: 24px; display: flex; justify-content: center; align-items: center; cursor: pointer; pointer-events: auto; z-index: 10; box-shadow: 0 0 20px rgba(0,243,255,0.4); }
+
+        .modal { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(2, 6, 23, 0.95); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 20; color: #fff; text-align: center; padding: 20px; }
+        .modal h1 { font-size: 24px; color: #00f3ff; margin-bottom: 10px; text-shadow: 0 0 10px rgba(0,243,255,0.4); }
+        .modal p { color: #94a3b8; font-size: 13px; margin-bottom: 20px; max-width: 320px; line-height: 1.5; }
+        .btn { background: linear-gradient(135deg, #00f3ff, #2563eb); color: #030812; border: none; padding: 12px 30px; font-size: 15px; font-weight: bold; border-radius: 25px; cursor: pointer; box-shadow: 0 4px 15px rgba(0, 243, 255, 0.4); }
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <canvas id="gameCanvas"></canvas>
+
+        <div id="ui-layer">
+            <div class="hud-top">
+                <div class="hud-row">
+                    <div class="hud-box">
+                        <div class="score-title">B-2 ARMOR / SHIELD</div>
+                        <div class="health-bg"><div id="health-bar" class="health-bar"></div></div>
+                        <div id="sector-txt" style="font-size:10px; color:#fbbf24; margin-top:4px;">Sector 1: Outer Surface</div>
+                    </div>
+                    <div class="hud-box" style="text-align:right;">
+                        <div class="score-title">SCORE</div>
+                        <div id="score" class="score-val">000000</div>
+                        <div class="score-title" style="margin-top:2px;">HIGH SCORE</div>
+                        <div id="highscore" class="highscore-val">000000</div>
+                    </div>
+                </div>
+
+                <div class="level-bar">
+                    <div id="lvl-1" class="level-btn active">S1: Surface</div>
+                    <div id="lvl-2" class="level-btn">S2: Reinforced</div>
+                    <div id="lvl-3" class="level-btn">S3: Deep Vault</div>
+                    <div id="lvl-4" class="level-btn">S4: Lair Core</div>
+                    <div id="lvl-5" class="level-btn">S5: Ultimate</div>
+                </div>
+            </div>
+
+            <div id="info-btn" class="info-btn"></div>
+            <div id="info-pop" class="info-pop hidden">
+                Supporter, Designer & Developer;<br>
+                Telegram: <a href="https://t.me/ilwin01" target="_blank">t.me/ilwin01</a>
+            </div>
+
+            <div id="bomb-btn" class="bomb-btn" title="Drop GBU-57 MOP"></div>
+        </div>
+
+        <div id="start-modal" class="modal">
+            <h1>B-2 SPIRIT DEEP STRIKE</h1>
+            <p>Intense combat mode! Enhanced enemy air defenses fire heavily, while augmented F-35 escorts provide high-precision tactical support.</p>
+            <button id="start-btn" class="btn">Launch Operation</button>
+        </div>
+
+        <div id="over-modal" class="modal hidden">
+            <h1 id="over-title" style="color:#ef4444;">MISSION FAILED</h1>
+            <p id="over-desc">Your B-2 stealth bomber was intercepted.</p>
+            <p style="margin-bottom: 6px;">Final Score: <span id="final-score" style="color:#00f3ff; font-weight:bold;">0</span></p>
+            <p style="margin-bottom: 20px;">High Score: <span id="final-highscore" style="color:#fbbf24; font-weight:bold;">0</span></p>
+            <button id="restart-btn" class="btn">Retry Mission</button>
+        </div>
+    </div>
+
+    <script>
+        class SoundFX {
+            constructor() { this.ctx = null; }
+            init() {
+                if (!this.ctx) {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    if (AudioContext) this.ctx = new AudioContext();
+                }
+            }
+            explosion() {
+                if (!this.ctx) return;
+                try {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(140, this.ctx.currentTime);
+                    osc.frequency.linearRampToValueAtTime(25, this.ctx.currentTime + 0.25);
+                    gain.gain.setValueAtTime(0.25, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.25);
+                    osc.connect(gain); gain.connect(this.ctx.destination);
+                    osc.start(); osc.stop(this.ctx.currentTime + 0.25);
+                } catch(e) {}
+            }
+            bombDrop() {
+                if (!this.ctx) return;
+                try {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(300, this.ctx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(50, this.ctx.currentTime + 0.4);
+                    gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.4);
+                    osc.connect(gain); gain.connect(this.ctx.destination);
+                    osc.start(); osc.stop(this.ctx.currentTime + 0.4);
+                } catch(e) {}
+            }
+        }
+
+        const sfx = new SoundFX();
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const container = document.getElementById('game-container');
+
+        let width = 450, height = 800;
+        function resize() {
+            width = container.clientWidth || window.innerWidth;
+            height = container.clientHeight || window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+        }
+        resize();
+        window.addEventListener('resize', resize);
+
+        let isRunning = false;
+        let score = 0;
+        let highscore = parseInt(localStorage.getItem('b2_strike_highscore') || 0);
+        let level = 1;
+        let touchX = null, touchY = null;
+
+        const levelThreshold = 3000;
+
+        const sectors = [
+            { name: "Sector 1: Outer Surface", color: "#1e293b" },
+            { name: "Sector 2: Reinforced Rock", color: "#334155" },
+            { name: "Sector 3: Deep Underground Vault", color: "#475569" },
+            { name: "Sector 4: Lizard Core Lair", color: "#581c87" },
+            { name: "Sector 5: Final Stronghold", color: "#7f1d1d" }
+        ];
+
+        canvas.addEventListener('touchmove', e => {
+            e.preventDefault();
+            const rect = canvas.getBoundingClientRect();
+            touchX = e.touches[0].clientX - rect.left;
+            touchY = e.touches[0].clientY - rect.top;
+        }, { passive: false });
+
+        canvas.addEventListener('touchstart', e => {
+            const rect = canvas.getBoundingClientRect();
+            touchX = e.touches[0].clientX - rect.left;
+            touchY = e.touches[0].clientY - rect.top;
+        }, { passive: false });
+
+        canvas.addEventListener('touchend', () => { touchX = null; touchY = null; });
+
+        class B2Bomber {
+            constructor() {
+                this.x = width / 2;
+                this.y = height - 160;
+                this.speed = 7;
+                this.hp = 300;
+                this.maxHp = 300;
+                this.bombs = 12;
+            }
+            update() {
+                if (touchX !== null && touchY !== null) {
+                    this.x += (touchX - this.x) * 0.25;
+                    this.y += ((touchY - 60) - this.y) * 0.25;
+                }
+
+                this.x = Math.max(30, Math.min(width - 30, this.x));
+                this.y = Math.max(height * 0.40, Math.min(height - 120, this.y));
+            }
+            dropBunkerBuster() {
+                if (this.bombs > 0) {
+                    this.bombs--;
+                    sfx.bombDrop();
+                    bunkerBusters.push(new BunkerBuster(this.x, this.y));
+                }
+            }
+            draw() {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+
+                ctx.fillStyle = '#111827';
+                ctx.strokeStyle = '#00f3ff';
+                ctx.lineWidth = 1.5;
+
+                ctx.beginPath();
+                ctx.moveTo(0, -26);
+                ctx.lineTo(12, -8);
+                ctx.lineTo(36, 16);
+                ctx.lineTo(16, 20);
+                ctx.lineTo(6, 24);
+                ctx.lineTo(-6, 24);
+                ctx.lineTo(-16, 20);
+                ctx.lineTo(-36, 16);
+                ctx.lineTo(-12, -8);
+                ctx.closePath();
+                ctx.fill(); ctx.stroke();
+
+                ctx.fillStyle = '#00f3ff';
+                ctx.fillRect(-3, -6, 6, 8);
+
+                ctx.fillStyle = '#ef4444';
+                ctx.fillRect(-18, 14, 6, 4);
+                ctx.fillRect(12, 14, 6, 4);
+
+                ctx.restore();
+            }
+        }
+
+        class BunkerBuster {
+            constructor(x, y) {
+                this.x = x; this.y = y;
+                this.speed = 8;
+            }
+            update() { this.y += this.speed; }
+            draw() {
+                ctx.fillStyle = '#fbbf24';
+                ctx.beginPath(); ctx.arc(this.x, this.y, 6, 0, Math.PI * 2); ctx.fill();
+                ctx.strokeStyle = '#ef4444'; ctx.lineWidth = 2; ctx.stroke();
+            }
+        }
+
+        class F35Fighter {
+            constructor() {
+                this.side = Math.random() < 0.5 ? 'left' : 'right';
+                this.x = this.side === 'left' ? -30 : width + 30;
+                this.y = Math.random() * (height / 2) + 60;
+                this.targetX = this.side === 'left' ? Math.random() * 120 + 40 : width - (Math.random() * 120 + 40);
+                this.vx = (this.targetX - this.x) * 0.06;
+                this.vy = (Math.random() - 0.5) * 2;
+                this.lastShot = 0;
+                this.lifeTimer = 0;
+                this.angle = 0;
+            }
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.lifeTimer++;
+
+                let target = bunkers.find(b => b.isDefenseGrid && b.y < this.y);
+                if (!target && bunkers.length > 0) target = bunkers[0];
+
+                if (target) {
+                    this.angle = Math.atan2(target.y - this.y, target.x - this.x);
+                }
+
+                const now = Date.now();
+                //         F-35
+                let fireRate = Math.max(100, 240 - (level * 25));
+                if (now - this.lastShot > fireRate) {
+                    let tx = target ? target.x : this.x + (Math.random() - 0.5) * 40;
+                    let ty = target ? target.y : 0;
+                    supportMissiles.push(new SupportMissile(this.x, this.y, tx, ty));
+                    this.lastShot = now;
+                }
+            }
+            draw() {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.angle + Math.PI / 2);
+                ctx.fillStyle = '#475569';
+                ctx.strokeStyle = '#38bdf8';
+                ctx.lineWidth = 1.2;
+                ctx.beginPath();
+                ctx.moveTo(0, -16);
+                ctx.lineTo(12, 14);
+                ctx.lineTo(0, 8);
+                ctx.lineTo(-12, 14);
+                ctx.closePath();
+                ctx.fill(); ctx.stroke();
+                ctx.restore();
+            }
+        }
+
+        class SupportMissile {
+            constructor(x, y, tx, ty) {
+                this.x = x; this.y = y;
+                const angle = Math.atan2(ty - y, tx - x);
+                const spd = 16; //     
+                this.vx = Math.cos(angle) * spd;
+                this.vy = Math.sin(angle) * spd;
+            }
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+            }
+            draw() {
+                ctx.fillStyle = '#38bdf8';
+                ctx.fillRect(this.x - 2, this.y - 8, 4, 16);
+            }
+        }
+
+        class EnemyBullet {
+            constructor(x, y, tx, ty) {
+                this.x = x; this.y = y;
+                const angle = Math.atan2(ty - y, tx - x);
+                const spd = 7.5 + (level * 1.2); //     
+                this.vx = Math.cos(angle) * spd;
+                this.vy = Math.sin(angle) * spd;
+            }
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+            }
+            draw() {
+                ctx.fillStyle = '#ef4444';
+                ctx.beginPath(); ctx.arc(this.x, this.y, 4.5, 0, Math.PI * 2); ctx.fill();
+            }
+        }
+
+        class UndergroundBunker {
+            constructor() {
+                this.x = Math.random() * (width - 100) + 50;
+                this.y = -60;
+                this.isDefenseGrid = Math.random() < 0.7; //     
+                this.hp = 14 + (level * 7);
+                this.maxHp = this.hp;
+                this.speed = 0.9 + (level * 0.15);
+                this.lastShot = Date.now() + Math.random() * 800;
+            }
+            update() {
+                this.y += this.speed;
+
+                if (this.isDefenseGrid && this.hp > 0 && this.y > 0 && this.y < height - 80) {
+                    const now = Date.now();
+                    //        
+                    let defenseFireRate = Math.max(350, 1000 - (level * 150));
+                    if (now - this.lastShot > defenseFireRate) {
+                        enemyBullets.push(new EnemyBullet(this.x, this.y, player.x, player.y));
+                        this.lastShot = now;
+                    }
+                }
+            }
+            draw() {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.fillStyle = '#1e293b';
+                ctx.strokeStyle = this.isDefenseGrid ? '#ef4444' : '#94a3b8';
+                ctx.lineWidth = 2;
+                ctx.fillRect(-35, -20, 70, 40);
+                ctx.strokeRect(-35, -20, 70, 40);
+
+                ctx.fillStyle = this.isDefenseGrid ? '#ef4444' : '#60a5fa';
+                ctx.beginPath(); ctx.arc(0, 0, 10, 0, Math.PI * 2); ctx.fill();
+
+                ctx.fillStyle = '#ffffff';
+                ctx.font = '8px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText(this.isDefenseGrid ? 'DEFENSE' : 'VAULT', 0, -24);
+
+                ctx.fillStyle = '#000';
+                ctx.fillRect(-25, -30, 50, 5);
+                ctx.fillStyle = this.isDefenseGrid ? '#22c55e' : '#38bdf8';
+                ctx.fillRect(-25, -30, 50 * (this.hp / this.maxHp), 5);
+
+                ctx.restore();
+            }
+        }
+
+        let player = new B2Bomber();
+        let bunkerBusters = [];
+        let supportMissiles = [];
+        let enemyBullets = [];
+        let bunkers = [];
+        let f35s = [];
+
+        function addScore(amount) {
+            score += amount;
+            document.getElementById('score').innerText = String(score).padStart(6, '0');
+            if (score > highscore) {
+                highscore = score;
+                localStorage.setItem('b2_strike_highscore', highscore);
+                document.getElementById('highscore').innerText = String(highscore).padStart(6, '0');
+            }
+        }
+
+        function spawnBunkers() {
+            if (bunkers.length < Math.min(6, 2 + Math.floor(level / 2))) {
+                if (Math.random() < 0.02 + (level * 0.005)) {
+                    bunkers.push(new UndergroundBunker());
+                }
+            }
+        }
+
+        function manageF35Support() {
+            //    F-35     
+            if (f35s.length < 6 && Math.random() < 0.08) {
+                f35s.push(new F35Fighter());
+            }
+            for (let i = f35s.length - 1; i >= 0; i--) {
+                let f = f35s[i];
+                f.update(); f.draw();
+                if (f.y > height + 50 || f.lifeTimer > 250) {
+                    f35s.splice(i, 1);
+                }
+            }
+        }
+
+        function updateLevelUI() {
+            document.getElementById('sector-txt').innerText = sectors[level - 1].name;
+            for (let i = 1; i <= 5; i++) {
+                const btn = document.getElementById(`lvl-${i}`);
+                if (btn) {
+                    if (i <= level) btn.classList.add('active');
+                    else btn.classList.remove('active');
+                }
+            }
+        }
+
+        function gameLoop() {
+            if (!isRunning) return;
+
+            ctx.fillStyle = sectors[level - 1].color; 
+            ctx.fillRect(0, 0, width, height);
+
+            ctx.strokeStyle = 'rgba(0, 243, 255, 0.05)';
+            ctx.lineWidth = 1;
+            for (let i = 0; i < width; i += 40) {
+                ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, height); ctx.stroke();
+            }
+
+            // .    
+            spawnBunkers();
+            for (let i = bunkers.length - 1; i >= 0; i--) {
+                let bk = bunkers[i];
+                bk.update(); bk.draw();
+                if (bk.y > height + 60) {
+                    bunkers.splice(i, 1);
+                }
+            }
+
+            // .     F-35
+            manageF35Support();
+
+            for (let i = supportMissiles.length - 1; i >= 0; i--) {
+                let sm = supportMissiles[i];
+                sm.update(); sm.draw();
+                let hit = false;
+
+                for (let j = bunkers.length - 1; j >= 0; j--) {
+                    let bk = bunkers[j];
+                    if (bk.isDefenseGrid && bk.hp > 0 && Math.hypot(sm.x - bk.x, sm.y - bk.y) < 35) {
+                        bk.hp -= 7;
+                        hit = true;
+                        if (bk.hp <= 0) {
+                            sfx.explosion();
+                            bunkers.splice(j, 1);
+                            addScore(450);
+
+                            if (score >= level * levelThreshold) {
+                                if (level < 5) {
+                                    level++;
+                                    updateLevelUI();
+                                    player.hp = Math.min(player.maxHp, player.hp + 80);
+                                    player.bombs += 6;
+                                } else {
+                                    gameWon();
+                                    return;
+                                }
+                            }
+                        }
+                        break;
+                    }
+                }
+
+                if (hit || sm.y < -20 || sm.y > height + 20 || sm.x < -20 || sm.x > width + 20) {
+                    supportMissiles.splice(i, 1);
+                }
+            }
+
+            // .        B-2
+            for (let i = enemyBullets.length - 1; i >= 0; i--) {
+                let eb = enemyBullets[i];
+                eb.update(); eb.draw();
+
+                if (Math.hypot(player.x - eb.x, player.y - eb.y) < 22) {
+                    sfx.explosion();
+                    player.hp -= 25;
+                    enemyBullets.splice(i, 1);
+                    checkGameOver();
+                } else if (eb.y > height + 20 || eb.y < -20 || eb.x < -20 || eb.x > width + 20) {
+                    enemyBullets.splice(i, 1);
+                }
+            }
+
+            // .   B-2
+            for (let i = bunkerBusters.length - 1; i >= 0; i--) {
+                let bb = bunkerBusters[i];
+                bb.update(); bb.draw();
+                let hitBunker = false;
+
+                for (let j = bunkers.length - 1; j >= 0; j--) {
+                    let bk = bunkers[j];
+                    if (!bk.isDefenseGrid && bk.hp > 0 && Math.hypot(bb.x - bk.x, bb.y - bk.y) < 35) {
+                        sfx.explosion();
+                        bk.hp -= 30;
+                        hitBunker = true;
+                        if (bk.hp <= 0) {
+                            bunkers.splice(j, 1);
+                            addScore(700);
+
+                            if (score >= level * levelThreshold) {
+                                if (level < 5) {
+                                    level++;
+                                    updateLevelUI();
+                                    player.hp = Math.min(player.maxHp, player.hp + 80);
+                                    player.bombs += 6;
+                                } else {
+                                    gameWon();
+                                    return;
+                                }
+                            }
+                        }
+                        break;
+                    }
+                }
+
+                if (hitBunker || bb.y > height + 20) {
+                    bunkerBusters.splice(i, 1);
+                }
+            }
+
+            // .  B-2   
+            player.update();
+            player.draw();
+
+            document.getElementById('health-bar').style.width = Math.max(0, (player.hp / player.maxHp) * 100) + '%';
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        function checkGameOver() {
+            if (player.hp <= 0) {
+                isRunning = false;
+                document.getElementById('over-title').innerText = "MISSION FAILED";
+                document.getElementById('over-title').style.color = "#ef4444";
+                document.getElementById('over-desc').innerText = "Your B-2 stealth bomber was intercepted.";
+                document.getElementById('final-score').innerText = score;
+                document.getElementById('final-highscore').innerText = highscore;
+                document.getElementById('over-modal').classList.remove('hidden');
+            }
+        }
+
+        function gameWon() {
+            isRunning = false;
+            document.getElementById('over-title').innerText = "MISSION ACCOMPLISHED!";
+            document.getElementById('over-title').style.color = "#00f3ff";
+            document.getElementById('over-desc').innerText = "All underground lizard lairs successfully neutralized!";
+            document.getElementById('final-score').innerText = score;
+            document.getElementById('final-highscore').innerText = highscore;
+            document.getElementById('over-modal').classList.remove('hidden');
+        }
+
+        function resetGame() {
+            score = 0; level = 1;
+            player = new B2Bomber();
+            bunkerBusters = []; supportMissiles = []; enemyBullets = []; bunkers = []; f35s = [];
+            document.getElementById('score').innerText = "000000";
+            document.getElementById('highscore').innerText = String(highscore).padStart(6, '0');
+            updateLevelUI();
+        }
+
+        document.getElementById('highscore').innerText = String(highscore).padStart(6, '0');
+
+        document.getElementById('start-btn').addEventListener('click', () => {
+            sfx.init();
+            document.getElementById('start-modal').classList.add('hidden');
+            resetGame(); isRunning = true; gameLoop();
+        });
+
+        document.getElementById('restart-btn').addEventListener('click', () => {
+            sfx.init();
+            document.getElementById('over-modal').classList.add('hidden');
+            resetGame(); isRunning = true; gameLoop();
+        });
+
+        document.getElementById('bomb-btn').addEventListener('click', () => {
+            sfx.init();
+            player.dropBunkerBuster();
+        });
+
+        const infoBtn = document.getElementById('info-btn');
+        const infoPop = document.getElementById('info-pop');
+        infoBtn.addEventListener('click', (e) => { e.stopPropagation(); infoPop.classList.toggle('hidden'); });
+        document.addEventListener('click', () => infoPop.classList.add('hidden'));
+    </script>
+</body>
+</html>
